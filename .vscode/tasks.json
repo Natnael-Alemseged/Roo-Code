@@ -5,7 +5,7 @@
 	"tasks": [
 		{
 			"label": "watch",
-			"dependsOn": ["watch:webview", "watch:bundle", "watch:tsc"],
+			"dependsOn": ["watch:bundle", "watch:tsc"],
 			"presentation": {
 				"reveal": "never"
 			},
@@ -17,24 +17,15 @@
 		{
 			"label": "watch:webview",
 			"type": "shell",
-			"command": "pnpm --filter @roo-code/vscode-webview dev",
+			"command": "echo 'webview-ui package not found, skipping...'",
 			"group": "build",
-			"problemMatcher": {
-				"owner": "vite",
-				"pattern": {
-					"regexp": "^$"
-				},
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": ".*VITE.*",
-					"endsPattern": ".*Local:.*"
-				}
-			},
-			"isBackground": true,
+			"problemMatcher": [],
+			"isBackground": false,
 			"presentation": {
 				"group": "watch",
-				"reveal": "always"
-			}
+				"reveal": "never"
+			},
+			"dependsOn": []
 		},
 		{
 			"label": "watch:bundle",

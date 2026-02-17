@@ -10,5 +10,9 @@
 	},
 	// Turn off tsc task auto detection since we have the necessary tasks as npm scripts
 	"typescript.tsc.autoDetect": "off",
-	"vitest.disableWorkspaceWarning": true
+	"vitest.disableWorkspaceWarning": true,
+	// Roo Code Configuration - Gemini Provider
+	// Note: API keys should be set via environment variables or VS Code user settings, not workspace settings
+	"rooCode.apiProvider": "gemini"
+	// API key should be configured via: rooCode.geminiApiKey in your user settings.json
 }

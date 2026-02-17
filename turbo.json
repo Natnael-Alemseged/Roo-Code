@@ -12,7 +12,28 @@
 		},
 		"build": {
 			"outputs": ["dist/**"],
-			"inputs": ["src/**", "package.json", "tsconfig.json", "tsup.config.ts", "vite.config.ts"]
+			"inputs": ["src/**", "package.json", "tsconfig.json", "tsup.config.ts"]
+		},
+		"build:nightly": {},
+		"bundle": {
+			"dependsOn": ["^build"],
+			"cache": false
+		},
+		"bundle:nightly": {
+			"dependsOn": ["^build"],
+			"cache": false
+		},
+		"vsix": {
+			"dependsOn": ["bundle"],
+			"cache": false
+		},
+		"vsix:nightly": {
+			"dependsOn": ["bundle:nightly"],
+			"cache": false
+		},
+		"watch:bundle": {
+			"dependsOn": ["@roo-code/build#build", "@roo-code/types#build"],
+			"cache": false
 		},
 		"watch:tsc": {
 			"cache": false
