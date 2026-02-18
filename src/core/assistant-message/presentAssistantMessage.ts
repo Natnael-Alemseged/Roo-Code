@@ -35,6 +35,7 @@ import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillTool } from "../tools/SkillTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { SelectActiveIntentTool } from "../tools/SelectActiveIntentTool"
+import { hookEngine } from "../../hooks/HookEngine"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
@@ -680,6 +681,20 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
+			if (!block.partial) {
+				const hookResult = await hookEngine.runPreHooks({
+					task: cline,
+					toolName: block.name,
+					params: block.params,
+					callbacks: { askApproval, handleError, pushToolResult },
+				})
+
+				if (!hookResult.proceed) {
+					pushToolResult(formatResponse.toolError(hookResult.error || "Blocked by hook engine"))
+					break
+				}
+			}
+
 			switch (block.name) {
 				case "write_to_file":
 					await checkpointSaveAndMark(cline)
@@ -927,6 +942,15 @@ export async function presentAssistantMessage(cline: Task) {
 					})
 					break
 				}
+			}
+
+			if (!block.partial) {
+				await hookEngine.runPostHooks({
+					task: cline,
+					toolName: block.name,
+					params: block.params,
+					callbacks: { askApproval, handleError, pushToolResult },
+				})
 			}
 
 			break
