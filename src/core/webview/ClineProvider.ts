@@ -1139,21 +1139,90 @@ export class ClineProvider
 	private async getHMRHtmlContent(webview: vscode.Webview): Promise<string> {
 		let localPort = "5173"
 
+		// Resolve and validate the Vite dev server port.
 		try {
 			const fs = require("fs")
 			const path = require("path")
+			const net = require("net")
 			const portFilePath = path.resolve(__dirname, "../../.vite-port")
 
+			async function canConnect(port: number, timeout = 600) {
+				return new Promise((resolve) => {
+					const socket = new net.Socket()
+					let settled = false
+					socket.setTimeout(timeout)
+					socket.once("error", () => {
+						if (!settled) {
+							settled = true
+							socket.destroy()
+							resolve(false)
+						}
+					})
+					socket.once("timeout", () => {
+						if (!settled) {
+							settled = true
+							socket.destroy()
+							resolve(false)
+						}
+					})
+					socket.connect(port, "127.0.0.1", () => {
+						if (!settled) {
+							settled = true
+							socket.end()
+							resolve(true)
+						}
+					})
+				})
+			}
+
+			let portFromFile: string | null = null
 			if (fs.existsSync(portFilePath)) {
-				localPort = fs.readFileSync(portFilePath, "utf8").trim()
+				try {
+					portFromFile = fs.readFileSync(portFilePath, "utf8").trim()
+					console.log(`[ClineProvider:Vite] Found ${portFilePath}: ${portFromFile}`)
+				} catch (err) {
+					console.error("[ClineProvider:Vite] Failed reading port file:", err)
+				}
+			}
+
+			// Helper to normalize and check a candidate port string/number
+			const checkCandidate = async (candidate: string | number) => {
+				const p = typeof candidate === "number" ? candidate : parseInt(String(candidate), 10)
+				if (!Number.isFinite(p) || p <= 0) return false
+				return await canConnect(p)
+			}
+
+			// Prefer the port from the file if it appears to be listening
+			if (portFromFile && (await checkCandidate(portFromFile))) {
+				localPort = String(portFromFile)
 				console.log(`[ClineProvider:Vite] Using Vite server port from ${portFilePath}: ${localPort}`)
 			} else {
-				console.log(
-					`[ClineProvider:Vite] Port file not found at ${portFilePath}, using default port: ${localPort}`,
-				)
+				// Probe a small range of likely Vite ports and pick the first that responds
+				const candidates = [5173, 5174, 5175, 5176, 5177]
+				let found: number | null = null
+				for (const p of candidates) {
+					/* eslint-disable no-await-in-loop */
+					if (await checkCandidate(p)) {
+						found = p
+						break
+					}
+				}
+				if (found) {
+					localPort = String(found)
+					try {
+						fs.writeFileSync(portFilePath, String(found) + "\n")
+						console.log(`[ClineProvider:Vite] Wrote detected Vite port ${found} to ${portFilePath}`)
+					} catch (err) {
+						console.error("[ClineProvider:Vite] Failed to write .vite-port:", err)
+					}
+				} else {
+					console.log(
+						`[ClineProvider:Vite] No Vite dev server detected on common ports, falling back to ${localPort}`,
+					)
+				}
 			}
 		} catch (err) {
-			console.error("[ClineProvider:Vite] Failed to read Vite port file:", err)
+			console.error("[ClineProvider:Vite] Error detecting Vite server port:", err)
 		}
 
 		const localServerUrl = `localhost:${localPort}`
