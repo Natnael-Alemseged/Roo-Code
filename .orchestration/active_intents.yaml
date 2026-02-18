@@ -1,0 +1,7 @@
+active_intents:
+  - id: "INT-001"
+    name: "Hook System Initialization"
+    status: "IN_PROGRESS"
+    owned_scope: ["src/hooks/**", "src/core/assistant-message/presentAssistantMessage.ts", ".orchestration/**"]
+    constraints: ["Enforce Intent Protocol", "Ensure Spatial Independence"]
+    acceptance_criteria: ["Type checks pass", "Hooks are registered"]
