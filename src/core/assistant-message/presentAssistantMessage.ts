@@ -451,6 +451,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 			// Store approval feedback to merge into tool result (GitHub #10465)
 			let approvalFeedback: { text: string; images?: string[] } | undefined
+			let lastError: Error | undefined = undefined
 
 			const pushToolResult = (content: ToolResponse) => {
 				// Native tool calling: only allow ONE tool_result per tool call
@@ -549,6 +550,7 @@ export async function presentAssistantMessage(cline: Task) {
 				if (error instanceof AskIgnoredError) {
 					return
 				}
+				lastError = error
 				const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
 
 				await cline.say(
@@ -685,7 +687,7 @@ export async function presentAssistantMessage(cline: Task) {
 				const hookResult = await hookEngine.runPreHooks({
 					task: cline,
 					toolName: block.name,
-					params: block.params,
+					params: (block as any).nativeArgs || block.params,
 					callbacks: { askApproval, handleError, pushToolResult },
 				})
 
@@ -948,8 +950,9 @@ export async function presentAssistantMessage(cline: Task) {
 				await hookEngine.runPostHooks({
 					task: cline,
 					toolName: block.name,
-					params: block.params,
+					params: (block as any).nativeArgs || block.params,
 					callbacks: { askApproval, handleError, pushToolResult },
+					result: lastError,
 				})
 			}
 
