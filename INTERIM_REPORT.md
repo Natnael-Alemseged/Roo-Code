@@ -141,12 +141,13 @@ Every entry links a Code Hash to an Intent ID for full **Spatial Independence** 
 
 - **Phase 0:** Completed. Full nervous system mapping in `ARCHITECTURE_NOTES.md`.
 - **Phase 1:** Completed. `select_active_intent` tool implemented, `Task` class augmented with `activeIntentId`, and System Prompt enforcing the Intent Protocol.
-- **Phase 2:** Scaffolding Ready. `src/hooks/` directory established with `HookEngine` and Pre/Post logic interfaces.
+- **Phase 2:** Completed. Core `HookEngine` logic with `intentGatekeeper` and `scopeEnforcement`.
+- **Phase 3:** Completed. Automated ledger recording with SHA-256 hashing in `agent_trace.jsonl`.
+- **Phase 4:** Completed. Optimistic locking via `last_hashes.json` and automated lesson recording in `CLAUDE.md`.
 
 ---
 
 ## 6. Next Steps (Final Submission)
 
-- Full Traceability (Phase 3): Automating the SHA-256 content hashing and ledger recording.
-- Parallel Governance (Phase 4): Optimistic locking using file hashes to prevent agent collisions.
-- Master Thinker Demo: Recording the end-to-end workflow with Architect/Builder personas.
+- **Master Thinker Demo:** Recording the end-to-end workflow with Architect/Builder personas working in parallel.
+- **Extended Validation:** Stress-testing the optimistic locking with multi-task simulations.
