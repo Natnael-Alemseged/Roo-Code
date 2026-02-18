@@ -1,239 +1,89 @@
-# Roo Code Architecture Notes — Phase 0: Archaeological Dig
+# Roo Code Architecture Notes — The AI-Native IDE Reference
 
-**TRP1 Challenge Week 1: AI-Native IDE & Intent-Code Traceability**
+**TRP1 Challenge: Architecting Intent-Code Traceability**
 
-This document captures the results of Phase 0: mapping the nervous system of the Roo Code extension for hook injection and orchestration.
-
----
-
-## 1. Extension Structure Overview
-
-```
-src/
-├── activate/              # Extension entry point
-├── api/                   # LLM providers (OpenAI, Anthropic, etc.)
-├── core/                  # Core agent logic
-│   ├── assistant-message/ # Tool dispatch & presentation
-│   ├── prompts/           # System prompt & tool definitions
-│   ├── task/              # Task lifecycle, build-tools
-│   └── tools/             # Native tool implementations
-├── core/webview/          # ClineProvider (Extension Host ↔ Webview)
-└── webview-ui/            # React UI (restricted presentation layer)
-```
-
-**Privilege separation (per challenge spec):**
-
-- **Webview (UI):** Restricted presentation layer. Emits events via `postMessage`.
-- **Extension Host (Logic):** Handles API polling, secret management, MCP, tool execution.
-- **Hook Engine (to build):** Middleware boundary in Extension Host, wrapping tool execution.
+This document serves as the technical reference for the Roo Code extension's internals, focusing on the instrumentation of the hook system and governance layers.
 
 ---
 
-## 2. Tool Loop — Where `execute_command` and `write_to_file` Are Handled
+## 1. Extension Structure & Privilege Separation
 
-### 2.1 Entry Point: `presentAssistantMessage`
+Roo Code is designed with strict boundaries between presentation, logic, and system access.
 
-**File:** `src/core/assistant-message/presentAssistantMessage.ts`
-
-This is the central dispatcher. It:
-
-1. Processes content blocks from the assistant's streaming response
-2. Switches on `block.type` (and `block.name` for tool_use)
-3. Routes to the appropriate tool via `tool.handle(cline, block, callbacks)`
-4. Passes `askApproval`, `handleError`, `pushToolResult` as callbacks
-
-**Critical switch (lines ~580–750):**
-
-```typescript
-switch (block.name) {
-  case "write_to_file":
-    await checkpointSaveAndMark(cline)
-    await writeToFileTool.handle(cline, block as ToolUse<"write_to_file">, {
-      askApproval, handleError, pushToolResult,
-    })
-    break
-  case "execute_command":
-    await executeCommandTool.handle(cline, block as ToolUse<"execute_command">, {...})
-    break
-  // ... apply_diff, edit_file, read_file, etc.
-}
-```
-
-### 2.2 Tool Classes
-
-| Tool              | File                                   | Key behavior                                                               |
-| ----------------- | -------------------------------------- | -------------------------------------------------------------------------- |
-| `write_to_file`   | `src/core/tools/WriteToFileTool.ts`    | `askApproval` → diff UI → `saveDirectly`/`saveChanges`                     |
-| `execute_command` | `src/core/tools/ExecuteCommandTool.ts` | `askApproval("command")` → `executeCommandInTerminal()`                    |
-| `skill`           | `src/core/tools/SkillTool.ts`          | Loads context from SkillsManager; good template for `select_active_intent` |
-
-All tools extend `BaseTool<TName>` and implement:
-
-- `execute(params, task, callbacks): Promise<void>`
-- Optionally `handlePartial(task, block)` for streaming
-
-**Base flow in `BaseTool.handle()`:**
-
-1. If `block.partial` → `handlePartial` only, return
-2. Parse `block.nativeArgs` (typed params)
-3. Call `execute(params, task, callbacks)`
-
-### 2.3 HITL (Human-in-the-Loop)
-
-`askApproval` is created per tool block in `presentAssistantMessage` (lines ~494–528). It:
-
-- Calls `cline.ask(type, partialMessage, ...)` which shows UI and waits for user
-- Returns `true` if approved, `false` if rejected
-- On reject: calls `pushToolResult(formatResponse.toolDenied())`, sets `cline.didRejectTool = true`
-
-**This is the place to add pre-approval hooks** (e.g., intent scope checks, `.intentignore`).
+- **Webview UI (Restricted Layer):** A React-based frontend running in a sandboxed environment. It communicates exclusively via `postMessage` with the Extension Host. It has NO direct access to the file system or terminal.
+- **Extension Host (Logic Controller):** The `ClineProvider` acts as the primary orchestrator. It manages task state, API configurations, and the lifecycle of "Silicon Workers" (Task instances).
+- **Core Agent (`Task.ts`):** The engine of the IDE. A single `Task` instance manages the conversation history, prompt construction, and recursive API polling.
+- **Hook Engine (Middleware Boundary):** Injected between the Tool Dispatcher and the Native Tools to enforce the **Intent Protocol** and **Scope Governance**.
 
 ---
 
-## 3. Prompt Builder — Where System Prompt Is Constructed
+## 2. Detailed Data Flow & Task Lifecycle
 
-### 3.1 System Prompt
+The extension operates on a deterministic reasoning loop.
 
-**File:** `src/core/prompts/system.ts`
+### 2.1 The Request Lifecycle
 
-- `generatePrompt()` builds the full system prompt
-- `SYSTEM_PROMPT` is the exported async function
-- **Usage:** `Task.getSystemPrompt()` calls `SYSTEM_PROMPT(...)` with context, cwd, mode, MCP, etc.
-
-**Sections (concatenated in `generatePrompt`):**
-
-- `roleDefinition` / `baseInstructions` (from mode)
-- `markdownFormattingSection`
-- `getToolUseGuidelinesSection`
-- `getCapabilitiesSection`
-- `getRulesSection` (cwd, settings)
-- `getSystemInfoSection`
-- `addCustomInstructions` (mode + global custom instructions)
-
-### 3.2 Tool Definitions for LLM
-
-**File:** `src/core/prompts/tools/native-tools/index.ts`
-
-- `getNativeTools(options)` returns array of OpenAI-format tool definitions
-- Individual tools: `src/core/prompts/tools/native-tools/write_to_file.ts`, `execute_command.ts`, etc.
-- Schema: `{ type: "function", function: { name, description, parameters } }`
-
-**Tool filtering:** `src/core/task/build-tools.ts`
-
-- `buildNativeToolsArrayWithRestrictions()` filters by mode and disabled tools
-- Used by API providers when building completion requests
-
-### 3.3 Where to Inject Intent Protocol
-
-To enforce _"You cannot write code immediately; your first action MUST be select_active_intent"_:
-
-1. **System prompt:** Add a new section in `generatePrompt()` or `addCustomInstructions()` in `src/core/prompts/system.ts`
-2. **Tool definitions:** Add `select_active_intent` in `src/core/prompts/tools/native-tools/` and register in `getNativeTools()`
+1.  **Ingestion:** User prompt arrives at `ClineProvider.ts` via `postMessage`.
+2.  **Creation:** `ClineProvider.createTask()` instantiates a new `Task` object.
+3.  **Bootstrapping:** The `Task` generates the `SYSTEM_PROMPT` (from `system.ts`) which defines the agent's identity, tools, and the **TRP1 Intent Protocol**.
+4.  **Inference:** The `Task` polls the LLM provider (Anthropic, OpenAI, etc.).
+5.  **Streaming & Parsing:** The `assistant-message` layer parses the raw stream in real-time.
+6.  **Tool Dispatch (`presentAssistantMessage.ts`):**
+    - Identifies `tool_use` blocks.
+    - **Pre-Hook Interception:** The Hook Engine verifies the `activeIntentId` (Handshake Phase).
+    - **Dispatch:** Routes to specific `NativeTool` (e.g., `WriteToFileTool`).
+7.  **HITL (Human-in-the-Loop):** Tools call `askApproval`, which sends an `ask` message back to the Webview, pausing the execution promise.
+8.  **Execution:** Upon user approval, the tool performs the mutation (FS write or Terminal execution).
+9.  **Post-Hook Resolution:** The Hook Engine logs the trace (Content Hash + Intent ID) to the ledger.
+10. **Feedback:** The tool result is appended to the conversation history, and the loop continues.
 
 ---
 
-## 4. Data Flow Summary
+## 3. The Hook System Architecture
 
-### 4.1 Tool Loop & Hook Interception
+The hook system is architected as an asynchronous middleware wrapper around the `BaseTool` class.
 
-```mermaid
-sequenceDiagram
-    participant LLM
-    participant ExtensionHost as Extension Host (presentAssistantMessage)
-    participant HookEngine as Hook Engine (Middleware)
-    participant Tool as Native Tool (e.g., WriteToFileTool)
-    participant VSCode as VS Code API / File System
+### 3.1 Pre-Hook (Governance Gatekeeper)
 
-    LLM->>ExtensionHost: Streams tool_use(write_to_file, params)
-    ExtensionHost->>HookEngine: runPreHooks(ctx)
-    Note over HookEngine: Intent Gatekeeper<br/>Scope Enforcement
-    HookEngine-->>ExtensionHost: proceed: true
-    ExtensionHost->>Tool: handle(ctx)
-    Tool->>VSCode: askApproval (HITL)
-    VSCode-->>Tool: user approved
-    Tool->>VSCode: saveChanges()
-    Tool-->>ExtensionHost: execution complete
-    ExtensionHost->>HookEngine: runPostHooks(ctx)
-    Note over HookEngine: agent_trace.jsonl append<br/>intent_map.md update
-    HookEngine-->>ExtensionHost: done
-    ExtensionHost->>LLM: Return tool_result
-```
+- **Intent Check:** Blocks all destructive tools if `task.activeIntentId` is undefined.
+- **Scope Verification:** Compares target file paths against the `owned_scope` defined in `.orchestration/active_intents.yaml`.
+- **Command Classification:** Prevents execution of restricted bash commands.
 
-### 4.2 Data Model Schemas
+### 3.2 Post-Hook (Traceability Ledger)
 
-#### .orchestration/active_intents.yaml
-
-```yaml
-active_intents:
-  - id: string
-    name: string
-    status: "IN_PROGRESS" | "COMPLETED"
-    owned_scope: string[] (glob patterns)
-    constraints: string[]
-    acceptance_criteria: string[]
-```
-
-#### .orchestration/agent_trace.jsonl (The Ledger)
-
-```json
-{
-  "id": "uuid-v4",
-  "timestamp": "ISO-8601",
-  "vcs": { "revision_id": "git_sha" },
-  "files": [
-    {
-      "relative_path": "string",
-      "conversations": [
-        {
-          "url": "task_id",
-          "contributor": { "entity_type": "AI", "model_identifier": "string" },
-          "ranges": [{ "start_line": number, "end_line": number, "content_hash": "sha256:..." }],
-          "related": [{ "type": "specification", "value": "INT-ID" }]
-        }
-      ]
-    }
-  ]
-}
-```
+- **Spatial Independence:** Calculates SHA-256 content hashes of code snippets to ensure the trace remains valid even if file content shifts.
+- **Intent Evolution:** Updates the `intent_map.md` to reflect which business intents are physically manifested in which files/functions.
 
 ---
 
-## 5. Hook Injection Points
+## 4. Key Components & Implementation Points
 
-| Phase   | What to Build                 | Where to Inject                                                                      |
-| ------- | ----------------------------- | ------------------------------------------------------------------------------------ |
-| Phase 1 | `select_active_intent` tool   | New tool in `core/tools/`, `core/prompts/tools/native-tools/`                        |
-| Phase 1 | Context loader (Pre-Hook)     | Intercept `select_active_intent` execution; return `<intent_context>`                |
-| Phase 2 | Pre-Hook on destructive tools | Before `askApproval` in `WriteToFileTool`, `ExecuteCommandTool`                      |
-| Phase 2 | Scope enforcement             | Pre-Hook: check `relPath` vs `owned_scope` in `active_intents.yaml`                  |
-| Phase 3 | Post-Hook on write            | After successful write in `WriteToFileTool.execute()`; append to `agent_trace.jsonl` |
-| Phase 4 | Optimistic locking            | Pre-Hook: compare file hash before write; block if stale                             |
-
----
-
-## 6. Key Files for Hook Implementation
-
-| Purpose              | Path                                                    |
-| -------------------- | ------------------------------------------------------- |
-| Tool dispatch        | `src/core/assistant-message/presentAssistantMessage.ts` |
-| Write tool           | `src/core/tools/WriteToFileTool.ts`                     |
-| Execute command tool | `src/core/tools/ExecuteCommandTool.ts`                  |
-| System prompt        | `src/core/prompts/system.ts`                            |
-| Tool definitions     | `src/core/prompts/tools/native-tools/`                  |
-| Tool filtering       | `src/core/task/build-tools.ts`                          |
-| Base tool            | `src/core/tools/BaseTool.ts`                            |
-| Shared tool types    | `src/shared/tools.ts`                                   |
+| Component                    | Responsibility                  | Hook Injection Point                         |
+| :--------------------------- | :------------------------------ | :------------------------------------------- |
+| `ClineProvider.ts`           | Webview management & Task Stack | Task creation interception                   |
+| `Task.ts`                    | State machine & LLM loop        | Custom property injection (`activeIntentId`) |
+| `presentAssistantMessage.ts` | Context-aware dispatcher        | Central Hook middleware invocation           |
+| `BaseTool.ts`                | Abstract tool lifecycle         | `preHandle` and `postHandle` triggers        |
+| `system.ts`                  | Prompt assembly                 | "Intent Protocol" instruction injection      |
 
 ---
 
-## 7. Recommendations for `src/hooks/` Directory
+## 5. Metadata & Data Model Schemas
 
-Create a clean `src/hooks/` module with:
+### 5.1 .orchestration/active_intents.yaml
 
-- `HookEngine.ts` — middleware that wraps tool execution
-- `preHooks.ts` — Pre-Hook implementations (intent check, scope enforcement, stale-file check)
-- `postHooks.ts` — Post-Hook implementations (agent_trace, intent_map updates)
-- `orchestration/` — helpers for `.orchestration/` files (active_intents.yaml, agent_trace.jsonl, intent_map.md)
-- `selectActiveIntentTool.ts` — the new tool (or wire it through the engine)
+The source of truth for "Why" we are coding. Defines the **Owned Scope** and **Architectural Constraints**.
 
-The hook engine should be invoked from `presentAssistantMessage` (around the switch) or by wrapping the `handle` call for each tool.
+### 5.2 .orchestration/agent_trace.jsonl
+
+An append-only immutable ledger.
+
+- **Key Field:** `content_hash` -> Ensures we track the _semantic change_ not just line numbers.
+- **Key Field:** `related` -> Links the action back to the **Intent ID**.
+
+---
+
+## 6. Recommendations for Future Instrumentation
+
+- **Optimistic Concurrency:** Use the `content_hash` from the Post-Hook to detect stale reads when multiple agents (Architect/Builder/Tester) are active.
+- **Lesson Recording:** Automate the population of `CLAUDE.md` by intercepting failed lints/tests in the Hook Engine and summarizing the "Lesson Learned".
