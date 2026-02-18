@@ -56,7 +56,7 @@ The Hook System is designed to repay **Cognitive Debt** and **Trust Debt** by en
 
 **Decision:** We enforced a mandatory "Checkout" phase using the `select_active_intent` tool.
 
-- **Rationale:** Traditional agents "vibe code" by jumping immediately to syntax. Our Handshake forces a reasoning intercept where the agent must declare _Why_ (Intent ID) before they can act. This creates a causal link between Business Intent and physical code changes.
+- **Rationale:** Traditional agents "vibe code" by jumping immediately to syntax. Our Handshake forces a reasoning intercept where the agent must declare _Why_ (Intent ID) before they can act. This ensures **Curated Context**: the agent only sees what is relevant to the active intent, preventing the "Context Rot" associated with dumping the entire codebase into the prompt.
 
 ### 3.3 Privilege Separation
 
@@ -88,7 +88,7 @@ sequenceDiagram
     Tool->>VSCode: saveChanges()
     Tool-->>ExtensionHost: execution complete
     ExtensionHost->>HookEngine: runPostHooks(ctx)
-    Note over HookEngine: agent_trace.jsonl append<br/>intent_map.md update
+    Note over HookEngine: agent_trace.jsonl append (Spatial Independence)<br/>intent_map.md update
     HookEngine-->>ExtensionHost: done
     ExtensionHost->>LLM: Return tool_result
 ```
@@ -109,7 +109,7 @@ active_intents:
 
 #### .orchestration/agent_trace.jsonl (The Audit Ledger)
 
-Every entry links a Code Hash to an Intent ID for full spatial independence.
+Every entry links a Code Hash to an Intent ID for full **Spatial Independence** (traceability remains valid even as files shift and line numbers change).
 
 ```json
 {
@@ -133,6 +133,9 @@ Every entry links a Code Hash to an Intent ID for full spatial independence.
 ```
 
 ---
+
+> [!NOTE]
+> Detailed technical mapping, including exact file paths and logic injection points identified during Phase 0, is documented extensively in `ARCHITECTURE_NOTES.md`.
 
 ## 5. Implementation Progress
 
