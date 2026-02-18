@@ -34,6 +34,7 @@ import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillTool } from "../tools/SkillTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
+import { SelectActiveIntentTool } from "../tools/SelectActiveIntentTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
@@ -100,6 +101,8 @@ export async function presentAssistantMessage(cline: Task) {
 		cline.presentAssistantMessageLocked = false
 		return
 	}
+
+	const selectActiveIntentTool = new SelectActiveIntentTool()
 
 	switch (block.type) {
 		case "mcp_tool_use": {
@@ -383,6 +386,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
+					case "select_active_intent":
+						return `[${block.name} for intent '${block.params.intent_id}']`
 					default:
 						return `[${block.name}]`
 				}
@@ -844,6 +849,13 @@ export async function presentAssistantMessage(cline: Task) {
 				case "generate_image":
 					await checkpointSaveAndMark(cline)
 					await generateImageTool.handle(cline, block as ToolUse<"generate_image">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "select_active_intent":
+					await selectActiveIntentTool.handle(cline, block as ToolUse<"select_active_intent">, {
 						askApproval,
 						handleError,
 						pushToolResult,
