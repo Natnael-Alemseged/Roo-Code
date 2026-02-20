@@ -23,6 +23,7 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 	getSkillsSection,
+	intentProtocolSection,
 } from "./sections"
 
 // Helper function to get prompt component, filtering out empty objects
@@ -97,6 +98,8 @@ ${skillsSection ? `\n${skillsSection}` : ""}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}
+
+${intentProtocolSection()}
 
 ${getObjectiveSection()}
 
