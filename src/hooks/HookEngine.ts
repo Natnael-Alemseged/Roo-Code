@@ -14,7 +14,7 @@ import path from "path"
 import type { Task } from "../core/task/Task"
 import type { ToolCallbacks } from "../core/tools/BaseTool"
 import { intentGatekeeper, scopeEnforcement, optimisticLockCheck } from "./preHooks"
-import { appendAgentTrace, updateIntentMap } from "./postHooks"
+import { appendAgentTrace, updateIntentMap, recordLesson } from "./postHooks"
 
 export type ToolName = string
 export type HookPhase = "pre" | "post"
@@ -63,7 +63,12 @@ export class HookEngine {
 	 * Run Post-Hooks after successful tool execution.
 	 */
 	async runPostHooks(ctx: HookContext & { result?: unknown }): Promise<void> {
-		const { toolName, params, task } = ctx
+		const { toolName, params, task, result } = ctx
+
+		// 1. Record lessons on failure
+		if (result instanceof Error) {
+			await recordLesson(ctx, result.message)
+		}
 
 		if (!task.activeIntentId) {
 			return
@@ -71,7 +76,7 @@ export class HookEngine {
 
 		const MUTATING_TOOLS = ["write_to_file", "apply_diff", "edit_file", "edit", "search_replace", "apply_patch", "search_and_replace"]
 
-		if (MUTATING_TOOLS.includes(toolName)) {
+		if (MUTATING_TOOLS.includes(toolName) && !(result instanceof Error)) {
 			try {
 				const relativePath = (params?.path || params?.file_path || params?.relative_path) as string | undefined
 				if (!relativePath) {
@@ -87,10 +92,10 @@ export class HookEngine {
 				const content = await fs.readFile(fullPath, "utf-8")
 				const hash = crypto.createHash("sha256").update(content).digest("hex")
 
-				// 1. Append Agent Trace
+				// 2. Append Agent Trace
 				await appendAgentTrace(ctx, normalizedRelativePath, hash, task.activeIntentId)
 
-				// 2. Update Intent Map
+				// 3. Update Intent Map
 				await updateIntentMap(ctx, task.activeIntentId, normalizedRelativePath)
 			} catch (error) {
 				console.error(`[runPostHooks] Failed to process post-hook for ${toolName}: ${error}`)
