@@ -3,7 +3,7 @@
  *
  * - Agent trace: append to .orchestration/agent_trace.jsonl
  * - Intent map: update .orchestration/intent_map.md
- * - Lesson recording: append to AGENTS.md on verification failure
+ * - Lesson recording: append to CLAUDE.md on verification failure
  */
 
 import path from "path"
@@ -17,9 +17,15 @@ export async function appendAgentTrace(
 	relativeFilePath: string,
 	contentHash: string,
 	intentId: string,
+	mutationClass?: string,
 ): Promise<void> {
 	const { task } = ctx
 	const tracePath = path.join(task.workspacePath, ".orchestration", "agent_trace.jsonl")
+
+	const related = [{ type: "specification", value: intentId }]
+	if (mutationClass) {
+		related.push({ type: "mutation_class", value: mutationClass })
+	}
 
 	const entry: AgentTraceEntry = {
 		id: uuidv4(),
@@ -32,8 +38,8 @@ export async function appendAgentTrace(
 					{
 						url: task.taskId,
 						contributor: { entity_type: "AI", model_identifier: "roo-code" },
-						ranges: [{ start_line: 1, end_line: 1, content_hash: contentHash }], // Simplified range for now
-						related: [{ type: "specification", value: intentId }],
+						ranges: [{ start_line: 1, end_line: 1, content_hash: contentHash.startsWith("sha256:") ? contentHash : `sha256:${contentHash}` }],
+						related,
 					},
 				],
 			},
