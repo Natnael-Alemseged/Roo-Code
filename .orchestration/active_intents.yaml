@@ -9,6 +9,6 @@ active_intents:
   - id: "INT-002"
     name: "Context Engineering Upgrades"
     status: "IN_PROGRESS"
-    owned_scope: ["src/core/tools/SelectActiveIntentTool.ts", "src/core/prompts/**"]
-    constraints: ["Curate context dynamically", "Inform agent of recent history"]
-    acceptance_criteria: ["SelectActiveIntent injections history", "Prompt sections reflect protocol"]
+    owned_scope: ["src/core/tools/SelectActiveIntentTool.ts", "src/core/prompts/**", "src/hooks/postHooks.ts"]
+    constraints: ["Curate context dynamically", "Inform agent of recent history", "Heuristic classification"]
+    acceptance_criteria: ["SelectActiveIntent injections history", "Prompt sections reflect protocol", "Post-hooks track Git SHA"]

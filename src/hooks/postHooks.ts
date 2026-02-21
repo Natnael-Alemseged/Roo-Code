@@ -12,6 +12,20 @@ import { v4 as uuidv4 } from "uuid"
 import type { HookContext } from "./HookEngine"
 import type { AgentTraceEntry } from "./orchestration/types"
 
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
+
+async function getGitSha(cwd: string): Promise<string> {
+	try {
+		const { stdout } = await execAsync("git rev-parse HEAD", { cwd })
+		return stdout.trim()
+	} catch {
+		return "HEAD"
+	}
+}
+
 export async function appendAgentTrace(
 	ctx: HookContext & { result?: unknown },
 	relativeFilePath: string,
@@ -21,6 +35,7 @@ export async function appendAgentTrace(
 ): Promise<void> {
 	const { task } = ctx
 	const tracePath = path.join(task.workspacePath, ".orchestration", "agent_trace.jsonl")
+	const gitSha = await getGitSha(task.workspacePath)
 
 	const related = [{ type: "specification", value: intentId }]
 	if (mutationClass) {
@@ -30,7 +45,7 @@ export async function appendAgentTrace(
 	const entry: AgentTraceEntry = {
 		id: uuidv4(),
 		timestamp: new Date().toISOString(),
-		vcs: { revision_id: "HEAD" }, // TODO: Get actual git SHA if available
+		vcs: { revision_id: gitSha },
 		files: [
 			{
 				relative_path: relativeFilePath,
@@ -38,7 +53,7 @@ export async function appendAgentTrace(
 					{
 						url: task.taskId,
 						contributor: { entity_type: "AI", model_identifier: "roo-code" },
-						ranges: [{ start_line: 1, end_line: 1, content_hash: contentHash.startsWith("sha256:") ? contentHash : `sha256:${contentHash}` }],
+						ranges: [{ start_line: 1, end_line: -1, content_hash: contentHash.startsWith("sha256:") ? contentHash : `sha256:${contentHash}` }],
 						related,
 					},
 				],

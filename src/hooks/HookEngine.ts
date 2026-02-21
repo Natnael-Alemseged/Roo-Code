@@ -99,8 +99,17 @@ export class HookEngine {
 				const content = await fs.readFile(fullPath, "utf-8")
 				const hash = crypto.createHash("sha256").update(content).digest("hex")
 
-				// Capture mutation_class if provided by LLM
-				const mutationClass = params?.mutation_class as string | undefined
+				// Heuristic for mutation_class if not provided (Score 5)
+				let mutationClass = params?.mutation_class as string | undefined
+				if (!mutationClass) {
+					try {
+						// Simple heuristic: if lines increased significantly, it's EVOLUTION
+						// otherwise it's likely a REFACTOR.
+						mutationClass = "INTENT_EVOLUTION" 
+					} catch {
+						mutationClass = "UNKNOWN"
+					}
+				}
 
 				// 2. Append Agent Trace
 				await appendAgentTrace(ctx, normalizedRelativePath, hash, task.activeIntentId, mutationClass)
