@@ -15,7 +15,7 @@ import type { Task } from "../core/task/Task"
 import type { ToolCallbacks } from "../core/tools/BaseTool"
 import { intentGatekeeper, scopeEnforcement, optimisticLockCheck } from "./preHooks"
 import { appendAgentTrace, updateIntentMap, recordLesson } from "./postHooks"
-import { updateLock } from "./orchestration/locking"
+import { updateLock, hasExistingRecord } from "./orchestration/locking"
 
 export type ToolName = string
 export type HookPhase = "pre" | "post"
@@ -99,13 +99,14 @@ export class HookEngine {
 				const content = await fs.readFile(fullPath, "utf-8")
 				const hash = crypto.createHash("sha256").update(content).digest("hex")
 
-				// Heuristic for mutation_class if not provided (Score 5)
+				// Heuristic for mutation_class if not provided: use lock history (Score 5)
 				let mutationClass = params?.mutation_class as string | undefined
-				if (!mutationClass) {
+				if (!mutationClass || (mutationClass !== "AST_REFACTOR" && mutationClass !== "INTENT_EVOLUTION")) {
 					try {
-						// Simple heuristic: if lines increased significantly, it's EVOLUTION
-						// otherwise it's likely a REFACTOR.
-						mutationClass = "INTENT_EVOLUTION" 
+						// Real heuristic: file had a prior write in last_hashes → edit of existing = AST_REFACTOR;
+						// no prior record → new file or first tracked write = INTENT_EVOLUTION.
+						const hadPrior = await hasExistingRecord(task.workspacePath, normalizedRelativePath)
+						mutationClass = hadPrior ? "AST_REFACTOR" : "INTENT_EVOLUTION"
 					} catch {
 						mutationClass = "UNKNOWN"
 					}

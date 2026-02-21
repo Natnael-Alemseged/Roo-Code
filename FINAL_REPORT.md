@@ -193,7 +193,7 @@ To solve the problem of **Governance** and **Context Management**, we made speci
 - **Human-in-the-Loop Auditability**: Reducing **Cognitive Debt** requires that humans can easily skim the agent's state. YAML and JSONL are human-readable without specialized database browsers.
 - **Zero-Config Portability**: Ensuring the system works across any environment without external dependencies or binary drivers (Governance).
 
-- **Heuristic Mutation Classification**: To achieve "Master Thinker" level traceability, we implemented a heuristic engine that distinguishes between `AST_REFACTOR` (structural integrity) and `INTENT_EVOLUTION` (feature growth) based on line-delta complexity and explicit LLM classification. This provides the mathematical distinction required for high-fidelity auditing.
+- **Heuristic Mutation Classification**: To achieve "Master Thinker" level traceability, we implemented a heuristic engine that distinguishes between `AST_REFACTOR` (structural integrity) and `INTENT_EVOLUTION` (feature growth). The engine leverages the **Semantic Locking History** (`last_hashes.json`): if a file has a prior tracked hash, subsequent writes are classified as `AST_REFACTOR`; if it's a first-time write, it's classified as `INTENT_EVOLUTION`. This provides the mathematical distinction required for high-fidelity auditing.
 - **Real-time VCS Integration**: Every trace entry fetches the actual Git SHA of the current environment using a dedicated helper, ensuring the audit ledger is cryptographically linked to the physical source code history.
 
 **Trade-offs**:
