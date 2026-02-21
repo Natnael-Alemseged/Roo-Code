@@ -1,7 +1,14 @@
 active_intents:
   - id: "INT-001"
-    name: "Hook System Initialization"
-    status: "IN_PROGRESS"
-    owned_scope: ["src/hooks/**", "src/core/assistant-message/presentAssistantMessage.ts", ".orchestration/**"]
+    name: "Core Hook System"
+    status: "DONE"
+    owned_scope: ["src/hooks/**", "src/core/assistant-message/presentAssistantMessage.ts"]
     constraints: ["Enforce Intent Protocol", "Ensure Spatial Independence"]
-    acceptance_criteria: ["Type checks pass", "Hooks are registered"]
+    acceptance_criteria: ["Middleware is non-blocking", "Trace captures hashes"]
+
+  - id: "INT-002"
+    name: "Context Engineering Upgrades"
+    status: "IN_PROGRESS"
+    owned_scope: ["src/core/tools/SelectActiveIntentTool.ts", "src/core/prompts/**", "src/hooks/postHooks.ts"]
+    constraints: ["Curate context dynamically", "Inform agent of recent history", "Heuristic classification"]
+    acceptance_criteria: ["SelectActiveIntent injections history", "Prompt sections reflect protocol", "Post-hooks track Git SHA"]

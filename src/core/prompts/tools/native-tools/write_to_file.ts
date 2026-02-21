@@ -32,6 +32,12 @@ export default {
 					type: "string",
 					description: CONTENT_PARAMETER_DESCRIPTION,
 				},
+				mutation_class: {
+					type: "string",
+					enum: ["AST_REFACTOR", "INTENT_EVOLUTION"],
+					description:
+						"Categorize this change. Use 'AST_REFACTOR' for structural improvements and 'INTENT_EVOLUTION' for feature changes.",
+				},
 			},
 			required: ["path", "content"],
 			additionalProperties: false,

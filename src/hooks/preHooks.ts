@@ -20,7 +20,6 @@ const DESTRUCTIVE_TOOLS = [
 	"search_replace",
 	"apply_patch",
 	"search_and_replace",
-	"search_files",
 ]
 
 const MUTATING_TOOLS = ["write_to_file", "apply_diff", "edit_file", "edit", "search_replace", "apply_patch", "search_and_replace"]

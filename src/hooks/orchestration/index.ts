@@ -7,4 +7,5 @@
  */
 
 export { readActiveIntents, findIntentById } from "./activeIntents"
+export { readAgentTrace, getRecentIntentHistory } from "./agentTrace"
 export type { ActiveIntent, ActiveIntentsFile, AgentTraceEntry } from "./types"
