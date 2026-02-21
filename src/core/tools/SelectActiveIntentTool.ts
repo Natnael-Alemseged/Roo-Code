@@ -1,6 +1,6 @@
 import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { readActiveIntents } from "../../hooks/orchestration"
+import { readActiveIntents, getRecentIntentHistory } from "../../hooks/orchestration"
 import { ActiveIntent } from "../../hooks/orchestration/types"
 
 export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
@@ -25,6 +25,9 @@ export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
 			
 			// Store in task state
 			task.activeIntentId = intent_id
+
+			// Fetch recent history for this intent (Score 5: Curated Context)
+			const history = await getRecentIntentHistory(workspacePath, intent_id)
 			
 			// Build context block for LLM
 			const contextBlock = `
@@ -38,6 +41,9 @@ ${intent.constraints?.map((c: string) => `    - ${c}`).join("\n") || "    None"}
   <acceptance_criteria>
 ${intent.acceptance_criteria?.map((ac: string) => `    - ${ac}`).join("\n") || "    None"}
   </acceptance_criteria>
+  <recent_history>
+${history}
+  </recent_history>
 </intent_context>
 
 Intent "${intent.name}" (${intent.id}) is now active. Your actions are now governed by this intent's scope and constraints.
