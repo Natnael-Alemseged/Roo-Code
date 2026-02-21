@@ -19,6 +19,18 @@ export interface LockFile {
 
 const FILENAME = "last_hashes.json"
 
+/** Returns true if this file had a prior hash record (was written before). Used for mutation_class heuristic. */
+export async function hasExistingRecord(cwd: string, relativePath: string): Promise<boolean> {
+	const filePath = path.join(cwd, ".orchestration", FILENAME)
+	try {
+		const raw = await fs.readFile(filePath, "utf-8")
+		const lockData: LockFile = JSON.parse(raw)
+		return lockData.hashes.some((h) => h.path === relativePath)
+	} catch {
+		return false
+	}
+}
+
 export async function checkLock(cwd: string, relativePath: string, taskId: string): Promise<{ allowed: boolean; error?: string }> {
 	const filePath = path.join(cwd, ".orchestration", FILENAME)
 	const fullPath = path.join(cwd, relativePath)
